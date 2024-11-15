@@ -1,0 +1,279 @@
+plugins {
+    id 'com.android.application'
+    id 'kotlin-android'
+    id 'org.jetbrains.kotlin.android'
+    alias(libs.plugins.compose.compiler)
+    id 'io.realm.kotlin'
+    id('com.github.triplet.play') version '3.9.0' apply false
+}
+
+composeCompiler {
+    enableStrongSkippingMode = true
+    reportsDestination = layout.buildDirectory.dir("compose_compiler")
+//    stabilityConfigurationFile = rootProject.layout.projectDirectory.file("stability_config.conf")
+}
+
+// from common.gradle
+android {
+    defaultConfig {
+        minSdk 24
+        compileSdk 35
+        targetSdk 34
+
+        kotlinOptions {
+            jvmTarget = '17'
+        }
+        vectorDrawables.useSupportLibrary false
+        vectorDrawables.generatedDensities = []
+
+        versionCode 3020297
+        versionName "6.13.10"
+
+        applicationId "ac.mdiq.podcini.R"
+        def commit = ""
+//        try {
+//            def hashStdOut = new ByteArrayOutputStream()
+//            exec {
+//                commandLine "git", "rev-parse", "--short", "HEAD"
+//                standardOutput = hashStdOut
+//            }
+//            commit = hashStdOut.toString().trim()
+//        } catch (Exception ignore) {
+//        }
+        buildConfigField "String", "COMMIT_HASH", ('"' + (commit.isEmpty() ? "Unknown commit" : commit) + '"')
+
+        if (project.hasProperty("podcastindexApiKey")) {
+            buildConfigField "String", "PODCASTINDEX_API_KEY", '"' + podcastindexApiKey + '"'
+            buildConfigField "String", "PODCASTINDEX_API_SECRET", '"' + podcastindexApiSecret + '"'
+        } else {
+            buildConfigField "String", "PODCASTINDEX_API_KEY", '"QT2RYHSUZ3UC9GDJ5MFY"'
+            buildConfigField "String", "PODCASTINDEX_API_SECRET", '"Zw2NL74ht5aCtx5zFL$#MY$##qdVCX7x37jq95Sz"'
+        }
+    }
+
+    packagingOptions {
+        resources {
+            exclude 'META-INF/DEPENDENCIES'
+            exclude 'META-INF/LICENSE'
+            exclude 'META-INF/NOTICE'
+            exclude 'META-INF/CHANGES'
+            exclude 'META-INF/README.md'
+            exclude 'META-INF/NOTICE.txt'
+            exclude 'META-INF/LICENSE.txt'
+            exclude 'META-INF/MANIFEST.MF'
+        }
+    }
+
+    compileOptions {
+        // Flag to enable support for the new language APIs
+        coreLibraryDesugaringEnabled true
+
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    testOptions {
+        animationsDisabled = true
+        unitTests {
+            includeAndroidResources = true
+        }
+    }
+
+    buildFeatures {
+        viewBinding true
+        buildConfig true
+        compose true
+    }
+
+    splits {
+        abi {
+             enable true
+             reset()
+             include "arm64-v8a"
+             universalApk true
+         }
+     }
+
+// from playFlavor.gradle
+    flavorDimensions += ["market"]
+    productFlavors {
+        free {
+            dimension "market"
+        }
+        play {
+            dimension "market"
+        }
+    }
+
+// start of the app build.gradle
+    namespace "ac.mdiq.podcini"
+    lint {
+        lintConfig = file("lint.xml")
+        checkReleaseBuilds false
+        checkDependencies true
+        warningsAsErrors true
+        abortOnError true
+        checkGeneratedSources = true
+        disable += ['TypographyDashes', 'TypographyQuotes', 'ObsoleteLintCustomCheck', 'BatteryLife',
+                    'ExportedReceiver', 'VectorDrawableCompat', 'NestedWeights', 'Overdraw', 'TextFields',
+                    'AlwaysShowAction', 'Autofill', 'ClickableViewAccessibility', 'ContentDescription',
+                    'KeyboardInaccessibleWidget', 'LabelFor', 'RelativeOverlap', 'SetTextI18n',
+                    'RtlCompat', 'RtlHardcoded', 'VectorPath', 'RtlEnabled']
+    }
+
+    signingConfigs {
+        releaseConfig {
+            enableV1Signing true
+            enableV2Signing true
+            storeFile file(project.getProperties().getOrDefault("releaseStoreFile", "keystore"))
+            storePassword project.getProperties().getOrDefault("releaseStorePassword", "password")
+            keyAlias project.getProperties().getOrDefault("releaseKeyAlias", "alias")
+            keyPassword project.getProperties().getOrDefault("releaseKeyPassword", "password")
+        }
+    }
+
+    buildTypes {
+        release {
+            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard.cfg"
+            resValue "string", "app_name", "Podcini.R"
+            resValue "string", "provider_authority", "ac.mdiq.podcini.R.provider"
+            vcsInfo.include false
+            minifyEnabled true
+            shrinkResources true
+            signingConfig signingConfigs.releaseConfig
+        }
+        debug {
+            resValue "string", "app_name", "Podcini.R Debug"
+            applicationIdSuffix ".debug"
+            resValue "string", "provider_authority", "ac.mdiq.podcini.R.debug.provider"
+        }
+    }
+
+    applicationVariants.configureEach { variant ->
+        variant.outputs.configureEach { output ->
+            def applicationName = "Podcini.R"
+            def buildType = variant.buildType.name
+            def versionName = variant.versionName
+            def flavorName = variant.flavorName ?: ""
+            def abiName = output.getFilter(com.android.build.OutputFile.ABI) ?: ""
+            outputFileName = "${applicationName}_${buildType}_${flavorName}_${versionName}_${abiName}.apk"
+        }
+    }
+    androidResources {
+        additionalParameters "--no-version-vectors"
+    }
+
+    dependenciesInfo {
+        // Disables dependency metadata when building APKs.
+        includeInApk = false
+        // Disables dependency metadata when building Android App Bundles.
+        includeInBundle = false
+    }
+}
+
+dependencies {
+    implementation libs.androidx.material3.android
+    implementation libs.androidx.fragment.compose
+//    implementation libs.androidx.material.icons.extended
+
+    /** Desugaring for using VistaGuide **/
+    coreLibraryDesugaring libs.desugar.jdk.libs.nio
+    implementation libs.vistaguide
+
+    def composeBom = libs.androidx.compose.bom
+    implementation composeBom
+
+    implementation libs.androidx.ui.tooling.preview
+    debugImplementation libs.androidx.ui.tooling
+    implementation libs.androidx.constraintlayout.compose
+
+    implementation libs.androidx.activity.compose
+    implementation libs.androidx.window
+
+    implementation libs.androidx.core.ktx
+    implementation libs.kotlinx.coroutines.android
+
+    implementation libs.androidx.lifecycle.runtime.ktx
+    implementation libs.androidx.annotation
+    implementation libs.androidx.appcompat
+    implementation libs.androidx.coordinatorlayout
+    implementation libs.androidx.fragment.fragment.ktx
+    implementation libs.androidx.gridlayout
+    implementation libs.androidx.media3.exoplayer
+    implementation libs.androidx.media3.ui
+    implementation libs.androidx.media3.media3.datasource.okhttp
+    implementation libs.media3.common
+    implementation libs.media3.session
+    implementation libs.androidx.palette.ktx
+    implementation libs.androidx.preference.ktx
+    implementation libs.androidx.recyclerview
+    implementation libs.androidx.viewpager2
+    implementation libs.androidx.work.runtime
+    implementation libs.androidx.core.splashscreen
+    implementation libs.androidx.documentfile
+    implementation libs.androidx.webkit
+
+    implementation libs.material
+
+    implementation libs.library.base
+
+    implementation libs.commons.lang3
+    implementation libs.commons.io
+    implementation libs.jsoup
+
+    implementation libs.coil
+    implementation libs.coil.compose
+
+    implementation libs.okhttp
+    implementation libs.okhttp3.okhttp.urlconnection
+    implementation libs.okio
+
+    implementation libs.rxjava
+    implementation libs.rxjava3.rxjava
+    implementation libs.rxandroid
+
+    implementation libs.iconics.core
+    implementation libs.iconics.views
+    implementation libs.google.material.typeface
+    implementation libs.google.material.typeface.outlined
+
+    implementation libs.searchpreference
+    implementation libs.balloon
+
+    implementation libs.fyydlin
+
+    implementation libs.readability4j
+
+//    debugImplementation 'com.squareup.leakcanary:leakcanary-android:2.14'
+
+    // Non-free dependencies:
+    playImplementation libs.core.ktx
+    compileOnly libs.wearable
+
+    playImplementation libs.play.services.base
+    freeImplementation libs.conscrypt.android
+
+    playApi libs.androidx.mediarouter
+//    playApi "com.google.android.support:wearable:2.9.0"
+    playApi libs.play.services.cast.framework
+}
+
+apply plugin: "io.realm.kotlin"
+
+if (project.hasProperty("podciniPlayPublisherCredentials")) {
+    apply plugin: 'com.github.triplet.play'
+    play {
+        track.set('alpha')
+        serviceAccountCredentials.set(file(podciniPlayPublisherCredentials))
+    }
+}
+
+tasks.register('copyLicense', Copy) {
+    from "../LICENSE"
+    into "src/main/assets/"
+    rename { String fileName ->
+        fileName + ".txt"
+    }
+}
+
+preBuild.dependsOn copyLicense
